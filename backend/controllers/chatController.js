@@ -4,7 +4,7 @@ const Conversation = require("../models/Conversation");
 exports.getChats = async (req, res) => {
   try {
     const chats = await Chat.find({ userId: req.user.id }).sort({
-      updateAt: -1,
+      updatedAt: -1,
     });
     if (!chats) {
       return res.status(401).json({ error: "chats not found" });
