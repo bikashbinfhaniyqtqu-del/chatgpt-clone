@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const admin = require("../config/firebaseAdmin");
 
 exports.register = async (req, res) => {
   try {
@@ -119,10 +120,36 @@ exports.getCurrentUser = async (req, res) => {
   }
 };
 
-exports.googleCallback = async (req, res) => {
+exports.googleLogin = async (req, res) => {
   try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ error: "Firebase idToken is required" });
+    }
+
+    // verify token with firebase
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const { email, name, picture, uid } = decoded;
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+      if (!user.profilePicture && picture) {
+        user.profilePicture = picture;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name: name || email.split("@")[0],
+        email,
+        profilePicture: picture || "",
+        provider: "google",
+        providerId: uid,
+      });
+    }
+
     const token = jwt.sign(
-      { id: req.user._id, email: req.user.email },
+      { id: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
@@ -132,10 +159,17 @@ exports.googleCallback = async (req, res) => {
       secure: true,
     });
 
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success-login?token=${token}`);
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        provider: user.provider,
+      },
+      message: "user login successfully",
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
-
-
